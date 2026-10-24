@@ -35,10 +35,10 @@ public class MainActivity extends Activity {
     private String currentPage = "Home";
     private EditText taskInput, targetInput, exclusionInput;
     private TextView policyStatus;
-    private final int ink = Color.rgb(24, 33, 43);
-    private final int muted = Color.rgb(95, 108, 121);
-    private final int accent = Color.rgb(30, 86, 112);
-    private final int paper = Color.rgb(247, 249, 250);
+    private final int ink = Color.rgb(38, 54, 48);
+    private final int muted = Color.rgb(105, 119, 111);
+    private final int accent = Color.rgb(15, 133, 111);
+    private final int paper = Color.rgb(246, 250, 242);
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -104,15 +104,20 @@ public class MainActivity extends Activity {
     }
     private Button button(String label, Runnable action) {
         Button b = new Button(this);
-        b.setText(label); b.setAllCaps(false);
+        b.setText(label); b.setAllCaps(false); b.setTextColor(ink); b.setTextSize(15);
+        android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
+        shape.setColor(Color.rgb(229, 245, 235)); shape.setCornerRadius(dp(14));
+        b.setBackground(shape); b.setPadding(dp(12), dp(8), dp(12), dp(8));
         b.setOnClickListener(v -> action.run());
         return b;
     }
     private void card(String heading, String body) {
         LinearLayout c = new LinearLayout(this);
         c.setOrientation(LinearLayout.VERTICAL);
-        c.setPadding(dp(16), dp(12), dp(16), dp(12));
-        c.setBackgroundColor(Color.WHITE);
+        c.setPadding(dp(18), dp(16), dp(18), dp(16));
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(Color.WHITE); bg.setCornerRadius(dp(18)); bg.setStroke(dp(1), Color.rgb(229, 237, 228));
+        c.setBackground(bg);
         c.addView(text(heading, 17, true, ink));
         c.addView(text(body, 14, false, muted));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
@@ -147,7 +152,7 @@ public class MainActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(paper);
         TextView top = text("AI MOBILE ASSISTANT", 12, true, accent);
-        top.setPadding(dp(20), dp(16), dp(20), dp(8)); root.addView(top);
+        top.setPadding(dp(20), dp(18), dp(20), dp(10)); top.setTextSize(13); root.addView(top);
         ScrollView scroll = new ScrollView(this);
         page = new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(dp(20), dp(8), dp(20), dp(20));
@@ -168,12 +173,16 @@ public class MainActivity extends Activity {
         else historyPage();
     }
     private void home() {
-        page.addView(text("Your phone. Your rules.", 26, true, ink));
-        page.addView(text("A user-controlled assistant shell. Nothing runs silently.", 15, false, muted));
+        page.addView(text("Meet Apex.", 32, true, ink));
+        page.addView(text("A calmer, smarter way to shape your next action.", 16, false, muted));
+        gap(10);
+        card("Your assistant, your choice", "Start with your voice or type a request. You stay in control at every step.");
+        page.addView(button("🎙  Activate voice command", this::startVoiceCapture));
+        page.addView(text("Tap to begin, then say your request. Voice capture is never secretly on.", 12, false, muted));
         gap(14);
         card("Security state", stopped() ? "STOPPED • All proposal approvals are blocked." :
             "ACTIVE • Policy checks are on. Action execution is not implemented.");
-        card("Voice input", "Tap-to-talk is available in Proposal. Microphone permission is requested only when you choose voice input.");
+        card("Voice commands", "Tap Activate voice command and speak naturally. Apex adds your words as a draft for you to review.");
         card("AI connection", "Not configured. This version does not send your data to an AI provider.");
         card("Action executor", "Disabled. Approvals are recorded locally only. No other app is opened or controlled.");
         page.addView(button(stopped() ? "Resume proposal review" : "Activate kill switch", () -> {
@@ -186,12 +195,12 @@ public class MainActivity extends Activity {
         page.addView(button("Review private-zone exclusions", () -> showPage("Policy")));
     }
     private void proposal() {
-        page.addView(text("Action proposal", 25, true, ink));
+        page.addView(text("Make it happen.", 27, true, ink));
         page.addView(text("Write a request and identify its intended target. This creates a review record only.", 14, false, muted));
         gap(10);
         page.addView(text("What do you want the assistant to do?", 14, true, ink));
         taskInput = edit("Describe one specific action");
-        page.addView(button("🎙 Speak request", this::startVoiceCapture));
+        page.addView(button("🎙  Speak your request", this::startVoiceCapture));
         page.addView(text("Voice creates a draft only. Check the transcript and target, then save for review. Android speech recognition may use your device/provider settings.", 12, false, muted));
         page.addView(text("Target package / identifier", 14, true, ink));
         targetInput = edit("Example: com.example.app");
