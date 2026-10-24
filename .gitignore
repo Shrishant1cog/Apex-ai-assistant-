@@ -1,0 +1,22 @@
+# Java compiled files
+*.class
+
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Android local configuration
+local.properties
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+*.iml
+
+# OS
+.DS_Store
