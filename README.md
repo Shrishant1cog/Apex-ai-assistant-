@@ -5,10 +5,13 @@ Native Android Java prototype with proposal review, local policy checks, private
 ## Safety status
 This is an early prototype. AI is not configured, execution is disabled, and proposal approval only records user consent. It does not control other apps. Exclusion rules only govern this app's own workflow; an ordinary app cannot enforce system-wide private zones or comprehensively protect other apps' data and notifications.
 
-## Build
-GitHub Actions builds a debug APK on pushes to `main`. Open **Actions → Android Debug Build → a successful run → Artifacts**, then extract the APK.
+## Get the latest APK
+After a successful **Android Debug Build** workflow, the latest debug APK is published at [release/apex-debug.apk](release/apex-debug.apk) in this repository. On GitHub, open that file and choose **Download raw file**. A copy is also retained as the workflow artifact for 7 days.
 
-The workflow uses Gradle 8.13 installed on its hosted runner. A Gradle wrapper JAR is not currently included in this repository; local wrapper builds are therefore not available until the official wrapper JAR is added.
+The build bot commits the APK after each source update. Commits that only update the APK do not start another build.
+
+## Build
+GitHub Actions builds a debug APK on pushes to `main` or by manual workflow dispatch. The workflow uses Gradle 8.13 installed on its hosted runner.
 
 ## Current features
 - Home, Proposal, Policy, and History screens
