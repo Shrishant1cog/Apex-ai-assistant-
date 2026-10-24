@@ -2,6 +2,11 @@ package com.aiassistant.mobile;
 
 import android.app.Activity;
 import android.content.SharedPreferences;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
+import android.Manifest;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
@@ -23,6 +28,8 @@ import java.util.Set;
 
 public class MainActivity extends Activity {
     private static final String PREFS = "assistant_local_settings";
+    private static final int VOICE_REQUEST = 7201;
+    private static final int MIC_PERMISSION_REQUEST = 7202;
     private SharedPreferences prefs;
     private LinearLayout page;
     private String currentPage = "Home";
@@ -37,6 +44,50 @@ public class MainActivity extends Activity {
         super.onCreate(state);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         showPage("Home");
+    }
+
+    private void startVoiceCapture() {
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            Toast.makeText(this, "Speech recognition is unavailable on this device.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, MIC_PERMISSION_REQUEST);
+            return;
+        }
+        launchVoiceRecognizer();
+    }
+
+    private void launchVoiceRecognizer() {
+        try {
+            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak one action you want Apex to propose");
+            intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+            startActivityForResult(intent, VOICE_REQUEST);
+        } catch (Exception e) {
+            Toast.makeText(this, "Could not start speech recognition.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == VOICE_REQUEST && resultCode == RESULT_OK && data != null) {
+            ArrayList<String> matches = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+            if (matches != null && !matches.isEmpty() && taskInput != null) {
+                taskInput.setText(matches.get(0));
+                taskInput.setSelection(taskInput.length());
+                Toast.makeText(this, "Transcript added. Review it before saving.", Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
+    @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == MIC_PERMISSION_REQUEST) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) launchVoiceRecognizer();
+            else Toast.makeText(this, "Microphone permission denied. You can type instead.", Toast.LENGTH_LONG).show();
+        }
     }
 
     private int dp(float v) { return (int)(v * getResources().getDisplayMetrics().density + .5f); }
@@ -122,7 +173,7 @@ public class MainActivity extends Activity {
         gap(14);
         card("Security state", stopped() ? "STOPPED • All proposal approvals are blocked." :
             "ACTIVE • Policy checks are on. Action execution is not implemented.");
-        card("Special permissions", "None requested. No Accessibility, notification access, microphone, contacts or location permission.");
+        card("Voice input", "Tap-to-talk is available in Proposal. Microphone permission is requested only when you choose voice input.");
         card("AI connection", "Not configured. This version does not send your data to an AI provider.");
         card("Action executor", "Disabled. Approvals are recorded locally only. No other app is opened or controlled.");
         page.addView(button(stopped() ? "Resume proposal review" : "Activate kill switch", () -> {
@@ -140,6 +191,8 @@ public class MainActivity extends Activity {
         gap(10);
         page.addView(text("What do you want the assistant to do?", 14, true, ink));
         taskInput = edit("Describe one specific action");
+        page.addView(button("🎙 Speak request", this::startVoiceCapture));
+        page.addView(text("Voice creates a draft only. Check the transcript and target, then save for review. Android speech recognition may use your device/provider settings.", 12, false, muted));
         page.addView(text("Target package / identifier", 14, true, ink));
         targetInput = edit("Example: com.example.app");
         page.addView(button("Save proposal for review", () -> {
