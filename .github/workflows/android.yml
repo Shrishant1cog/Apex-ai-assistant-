@@ -61,7 +61,6 @@ jobs:
             --notes "Automated Android debug build from commit ${{ github.sha }}.
 
           Download apex-debug.apk below. This is a debug build for testing, not a signed production release." \
-            --prerelease
       - uses: actions/upload-artifact@v4
         with:
           name: apex-debug
