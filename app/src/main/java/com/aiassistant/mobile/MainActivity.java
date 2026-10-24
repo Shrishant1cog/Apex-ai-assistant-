@@ -19,6 +19,8 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.speech.tts.TextToSpeech;
+import java.util.Locale;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -33,7 +35,9 @@ public class MainActivity extends Activity {
     private SharedPreferences prefs;
     private LinearLayout page;
     private String currentPage = "Home";
-    private EditText taskInput, targetInput, exclusionInput;
+    private EditText taskInput, targetInput, exclusionInput, chatInput;
+    private TextToSpeech speech;
+    private String voiceDestination = "chat";
     private TextView policyStatus;
     private final int ink = Color.rgb(38, 54, 48);
     private final int muted = Color.rgb(105, 119, 111);
@@ -43,6 +47,7 @@ public class MainActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        speech = new TextToSpeech(this, status -> { if (status == TextToSpeech.SUCCESS) speech.setLanguage(Locale.getDefault()); });
         showPage("Home");
     }
 
@@ -74,10 +79,15 @@ public class MainActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == VOICE_REQUEST && resultCode == RESULT_OK && data != null) {
             ArrayList<String> matches = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
-            if (matches != null && !matches.isEmpty() && taskInput != null) {
-                taskInput.setText(matches.get(0));
-                taskInput.setSelection(taskInput.length());
-                Toast.makeText(this, "Transcript added. Review it before saving.", Toast.LENGTH_LONG).show();
+            if (matches != null && !matches.isEmpty()) {
+                String spoken = matches.get(0);
+                if ("proposal".equals(voiceDestination) && taskInput != null) {
+                    taskInput.setText(spoken); taskInput.setSelection(taskInput.length());
+                    Toast.makeText(this, "Transcript added to proposal. Review before saving.", Toast.LENGTH_LONG).show();
+                } else if (chatInput != null) {
+                    chatInput.setText(spoken); chatInput.setSelection(chatInput.length());
+                    Toast.makeText(this, "Transcript added. Tap Send to continue.", Toast.LENGTH_LONG).show();
+                } else Toast.makeText(this, "Open Chat and try voice again.", Toast.LENGTH_LONG).show();
             }
         }
     }
@@ -158,7 +168,7 @@ public class MainActivity extends Activity {
         page.setPadding(dp(20), dp(8), dp(20), dp(20));
         scroll.addView(page); root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout nav = new LinearLayout(this); nav.setBackgroundColor(Color.WHITE);
-        String[] tabs = {"Home", "Proposal", "Policy", "History"};
+        String[] tabs = {"Home", "Chat", "Policy", "History"};
         for (String tab : tabs) {
             Button b = new Button(this); b.setText(tab); b.setAllCaps(false); b.setTextSize(11);
             b.setOnClickListener(v -> showPage(tab));
@@ -168,6 +178,7 @@ public class MainActivity extends Activity {
         setContentView(root);
 
         if ("Home".equals(name)) home();
+        else if ("Chat".equals(name)) chatPage();
         else if ("Proposal".equals(name)) proposal();
         else if ("Policy".equals(name)) policy();
         else historyPage();
@@ -177,8 +188,9 @@ public class MainActivity extends Activity {
         page.addView(text("A calmer, smarter way to shape your next action.", 16, false, muted));
         gap(10);
         card("Your assistant, your choice", "Start with your voice or type a request. You stay in control at every step.");
-        page.addView(button("🎙  Activate voice command", this::startVoiceCapture));
-        page.addView(text("Tap to begin, then say your request. Voice capture is never secretly on.", 12, false, muted));
+        page.addView(button("🎙  Talk to Apex", () -> { voiceDestination = "chat"; showPage("Chat"); startVoiceCapture(); }));
+        page.addView(text("Tap to talk. For wake-word listening, enable it separately when a supported wake engine is configured. Microphone capture is not secretly active.", 12, false, muted));
+        page.addView(button("Open conversation", () -> showPage("Chat")));
         gap(14);
         card("Security state", stopped() ? "STOPPED • All proposal approvals are blocked." :
             "ACTIVE • Policy checks are on. Action execution is not implemented.");
@@ -194,13 +206,39 @@ public class MainActivity extends Activity {
         page.addView(button("Create a proposal", () -> showPage("Proposal")));
         page.addView(button("Review private-zone exclusions", () -> showPage("Policy")));
     }
+
+    private void chatPage() {
+        page.addView(text("Talk to Apex.", 30, true, ink));
+        page.addView(text("Your conversation space. Type or dictate a message.", 15, false, muted));
+        gap(10);
+        card("AI connection", "Online AI is not connected yet. This build does not send messages to an AI service or pretend to generate AI answers.");
+        chatInput = edit("Ask Apex something…");
+        page.addView(button("🎙  Dictate message", () -> { voiceDestination = "chat"; startVoiceCapture(); }));
+        page.addView(button("Send message", () -> {
+            String message = chatInput == null ? "" : chatInput.getText().toString().trim();
+            if (message.isEmpty()) { Toast.makeText(this, "Type or dictate a message first.", Toast.LENGTH_SHORT).show(); return; }
+            addHistory("Chat draft composed (" + Math.min(message.length(), 500) + " characters); AI unavailable because no provider is configured.");
+            card("You", message);
+            card("Apex", "I received your message, but my AI brain is not connected yet. No online AI request was sent. Configure a secure AI backend to enable real answers.");
+            if (speech != null) speech.speak("I received your message, but my AI connection is not configured yet.", TextToSpeech.QUEUE_FLUSH, null, "apex-chat-status");
+            chatInput.setText("");
+        }));
+        gap(8);
+        page.addView(text("Voice replies here currently speak the connection status. Real AI voice conversations need the secure AI service.", 12, false, muted));
+    }
+
+    @Override protected void onDestroy() {
+        if (speech != null) { speech.stop(); speech.shutdown(); }
+        super.onDestroy();
+    }
+
     private void proposal() {
         page.addView(text("Make it happen.", 27, true, ink));
         page.addView(text("Write a request and identify its intended target. This creates a review record only.", 14, false, muted));
         gap(10);
         page.addView(text("What do you want the assistant to do?", 14, true, ink));
         taskInput = edit("Describe one specific action");
-        page.addView(button("🎙  Speak your request", this::startVoiceCapture));
+        page.addView(button("🎙  Speak your request", () -> { voiceDestination = "proposal"; startVoiceCapture(); }));
         page.addView(text("Voice creates a draft only. Check the transcript and target, then save for review. Android speech recognition may use your device/provider settings.", 12, false, muted));
         page.addView(text("Target package / identifier", 14, true, ink));
         targetInput = edit("Example: com.example.app");
