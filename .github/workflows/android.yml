@@ -51,6 +51,17 @@ jobs:
           fi
           git commit -m "Publish latest debug APK"
           git push origin HEAD:main
+      - name: Publish downloadable GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="apex-build-${{ github.run_number }}-${{ github.run_attempt }}"
+          gh release create "$TAG" app/build/outputs/apk/debug/app-debug.apk \
+            --title "Apex AI Assistant • Build ${{ github.run_number }}" \
+            --notes "Automated Android debug build from commit ${{ github.sha }}.
+
+          Download apex-debug.apk below. This is a debug build for testing, not a signed production release." \
+            --prerelease
       - uses: actions/upload-artifact@v4
         with:
           name: apex-debug
