@@ -18,7 +18,8 @@ GitHub Actions builds a debug APK on pushes to `main` or by manual workflow disp
 - Local proposal drafting and review
 - Kill switch and excluded-target checks
 - Locally retained history (up to 100 records)
-- No special Android permissions or AI provider configured
+- Optional tap-to-talk voice drafting through Android speech recognition (microphone permission requested only after the user taps Speak)
+- No AI provider or action executor configured
 
 ## Privacy note
-Proposal task descriptions may appear in local activity history when approved. Avoid entering passwords, financial details, or other secrets. Data stays in this app's local preferences in the current version.
+Proposal task descriptions may appear in local activity history when approved. Voice recognition is handled by the Android speech recognition provider available on the device and may follow that provider's data practices; voice input is opt-in. Review transcripts before saving. Avoid entering passwords, financial details, or other secrets. Proposal and history records stay in this app's local preferences in the current version.
