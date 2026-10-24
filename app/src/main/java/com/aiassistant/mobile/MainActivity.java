@@ -30,6 +30,8 @@ import java.util.Set;
 
 public class MainActivity extends Activity {
     private static final String PREFS = "assistant_local_settings";
+    private ApexKeyStore keyStore;
+    private ApexAiClient aiClient;
     private static final int VOICE_REQUEST = 7201;
     private static final int MIC_PERMISSION_REQUEST = 7202;
     private SharedPreferences prefs;
@@ -47,6 +49,8 @@ public class MainActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        keyStore = new ApexKeyStore(this);
+        aiClient = new ApexAiClient(keyStore);
         speech = new TextToSpeech(this, status -> { if (status == TextToSpeech.SUCCESS) speech.setLanguage(Locale.getDefault()); });
         showPage("Home");
     }
@@ -168,7 +172,7 @@ public class MainActivity extends Activity {
         page.setPadding(dp(20), dp(8), dp(20), dp(20));
         scroll.addView(page); root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout nav = new LinearLayout(this); nav.setBackgroundColor(Color.WHITE);
-        String[] tabs = {"Home", "Chat", "Policy", "History"};
+        String[] tabs = {"Home", "Chat", "Settings", "Policy", "History"};
         for (String tab : tabs) {
             Button b = new Button(this); b.setText(tab); b.setAllCaps(false); b.setTextSize(11);
             b.setOnClickListener(v -> showPage(tab));
@@ -180,6 +184,7 @@ public class MainActivity extends Activity {
         if ("Home".equals(name)) home();
         else if ("Chat".equals(name)) chatPage();
         else if ("Proposal".equals(name)) proposal();
+        else if ("Settings".equals(name)) settingsPage();
         else if ("Policy".equals(name)) policy();
         else historyPage();
     }
@@ -195,7 +200,8 @@ public class MainActivity extends Activity {
         card("Security state", stopped() ? "STOPPED • All proposal approvals are blocked." :
             "ACTIVE • Policy checks are on. Action execution is not implemented.");
         card("Voice commands", "Tap Talk to Apex and speak. Dictated messages are sent to the chat locally; an AI backend is still needed for answers.");
-        card("AI connection", "Not connected yet. Chat messages remain on-device in this version; no AI provider receives them.");
+        card("AI connection", keyStore.list().isEmpty() ? "No provider configured. Open Settings to add one or more keys." : "Configured AI keys: " + keyStore.list().size() + ". Open Settings to manage providers and connection checks.");
+        page.addView(button("AI provider settings", () -> showPage("Settings")));
         card("Action executor", "Disabled. Approvals are recorded locally only. No other app is opened or controlled.");
         page.addView(button(stopped() ? "Resume proposal review" : "Activate kill switch", () -> {
             prefs.edit().putBoolean("kill", !stopped()).apply();
@@ -211,7 +217,7 @@ public class MainActivity extends Activity {
         page.addView(text("Talk to Apex.", 30, true, ink));
         page.addView(text("A calmer place to ask, explore and learn.", 15, false, muted));
         gap(8);
-        card("Assistant status", "AI is not connected yet. Messages will not receive generated answers until a secure AI service is configured.");
+        card("Assistant status", keyStore.list().isEmpty() ? "No AI key configured. Add a provider in Settings." : "Apex will attempt configured providers and keys with automatic failover.");
         chatInput = edit("Message Apex…");
         page.addView(button("🎙  Speak and send", () -> { voiceDestination = "chat"; startVoiceCapture(); }));
         page.addView(button("Send message", () -> {
@@ -246,10 +252,17 @@ public class MainActivity extends Activity {
         }
         addHistory("Chat message: " + message);
         if (chatInput != null) chatInput.setText("");
-        // Fail honestly: no live AI transport exists in this app build yet.
-        addHistory("Apex response unavailable: AI backend is not configured.");
-        Toast.makeText(this, "Message sent locally. AI service is not connected yet.", Toast.LENGTH_LONG).show();
+        // Store user turn locally, then request response asynchronously.
+        addHistory("Apex is thinking…");
         showPage("Chat");
+        aiClient.ask(message, new ApexAiClient.Callback() {
+            @Override public void onSuccess(String answer, String providerLabel) {
+                runOnUiThread(() -> { addHistory("Apex: " + answer); addHistory("AI route: " + providerLabel); if (speech != null) speech.speak(answer, TextToSpeech.QUEUE_FLUSH, null, "apex-reply"); showPage("Chat"); });
+            }
+            @Override public void onFailure(String reason) {
+                runOnUiThread(() -> { addHistory("Apex response unavailable: " + reason); Toast.makeText(MainActivity.this, reason, Toast.LENGTH_LONG).show(); showPage("Chat"); });
+            }
+        });
     }
 
     @Override protected void onDestroy() {
@@ -353,7 +366,36 @@ public class MainActivity extends Activity {
         gap(10);
         card("Important limitation", "These exclusions only guard this assistant's proposal workflow. They cannot stop you or other apps from accessing excluded apps, their notifications, content or data.");
     }
-    private void historyPage() {
+
+    private void settingsPage() {
+        page.addView(text("Apex AI settings", 28, true, ink));
+        page.addView(text("Apex remains your assistant identity. Providers are interchangeable engines.", 14, false, muted));
+        gap(8);
+        card("Key safety", "Keys are encrypted with Android Keystore-backed AES-GCM and kept in private app storage. Keys are sent only to the endpoint you configure. Avoid unknown/custom endpoints.");
+        page.addView(text("Add provider / key", 18, true, ink));
+        EditText provider = edit("Provider label (e.g. OpenAI-compatible)");
+        EditText endpoint = edit("Chat completions endpoint URL (HTTPS recommended)");
+        EditText model = edit("Model name");
+        EditText secret = edit("API key (never shown again)"); secret.setInputType(129);
+        page.addView(button("Save key", () -> {
+            String label=provider.getText().toString().trim(), url=endpoint.getText().toString().trim(), m=model.getText().toString().trim(), k=secret.getText().toString();
+            if(label.isEmpty()||url.isEmpty()||m.isEmpty()||k.isEmpty()){Toast.makeText(this,"Complete all fields.",Toast.LENGTH_SHORT).show();return;}
+            if(!url.startsWith("https://") && !url.startsWith("http://10.0.2.2")){Toast.makeText(this,"Use HTTPS for remote endpoints.",Toast.LENGTH_LONG).show();return;}
+            try { keyStore.add(label,url,m,k); addHistory("AI provider key added: "+label); Toast.makeText(this,"Encrypted key saved.",Toast.LENGTH_SHORT).show(); showPage("Settings"); }
+            catch(Exception e){Toast.makeText(this,"Could not securely save key: "+e.getMessage(),Toast.LENGTH_LONG).show();}
+        }));
+        gap(12); page.addView(text("Configured keys",18,true,ink));
+        java.util.List<ApexKeyStore.Entry> entries=keyStore.list();
+        if(entries.isEmpty()) page.addView(text("No keys saved.",14,false,muted));
+        for(ApexKeyStore.Entry entry:entries){
+            card(entry.label+" • "+entry.model, "Status: "+entry.status+"\nEndpoint: "+entry.endpoint+"\nKey: "+entry.masked);
+            page.addView(button("Test connection • "+entry.label, () -> { Toast.makeText(this,"Testing "+entry.label+"…",Toast.LENGTH_SHORT).show(); aiClient.test(entry.id,new ApexAiClient.Callback(){public void onSuccess(String msg,String route){runOnUiThread(()->{keyStore.status(entry.id,"OK • tested");addHistory("Provider test passed: "+entry.label);Toast.makeText(MainActivity.this,"Connection succeeded.",Toast.LENGTH_LONG).show();showPage("Settings");});}public void onFailure(String err){runOnUiThread(()->{keyStore.status(entry.id,"Failed • "+err);addHistory("Provider test failed: "+entry.label);Toast.makeText(MainActivity.this,err,Toast.LENGTH_LONG).show();showPage("Settings");});}}); }));
+            page.addView(button("Remove key • "+entry.label, () -> { keyStore.remove(entry.id); addHistory("Provider key removed: "+entry.label); showPage("Settings"); }));
+        }
+        gap(8); card("Failover policy", "Apex tries eligible keys in order. Authentication, rate-limit, quota and server errors can move to the next key/provider. Bad-request errors stop. Offline failures stop. Respect provider quotas; extra keys do not create extra entitlement.");
+        card("Current limitation", "This app calls compatible chat-completions endpoints directly. A production multi-user release should move credentials to a controlled backend. Treat app/device compromise as a risk.");
+    }
+\n    private void historyPage() {
         page.addView(text("Local activity history", 25, true, ink));
         page.addView(text("Stored on this device. Entries are simple records, not tamper-proof security auditing.", 14, false, muted));
         gap(10);
