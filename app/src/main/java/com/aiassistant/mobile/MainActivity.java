@@ -86,7 +86,7 @@ public class MainActivity extends Activity {
                     Toast.makeText(this, "Transcript added to proposal. Review before saving.", Toast.LENGTH_LONG).show();
                 } else if (chatInput != null) {
                     chatInput.setText(spoken); chatInput.setSelection(chatInput.length());
-                    Toast.makeText(this, "Transcript added. Tap Send to continue.", Toast.LENGTH_LONG).show();
+                    sendChatMessage(spoken);
                 } else Toast.makeText(this, "Open Chat and try voice again.", Toast.LENGTH_LONG).show();
             }
         }
@@ -194,8 +194,8 @@ public class MainActivity extends Activity {
         gap(14);
         card("Security state", stopped() ? "STOPPED • All proposal approvals are blocked." :
             "ACTIVE • Policy checks are on. Action execution is not implemented.");
-        card("Voice commands", "Tap Activate voice command and speak naturally. Apex adds your words as a draft for you to review.");
-        card("AI connection", "Not configured. This version does not send your data to an AI provider.");
+        card("Voice commands", "Tap Talk to Apex and speak. Dictated messages are sent to the chat locally; an AI backend is still needed for answers.");
+        card("AI connection", "Not connected yet. Chat messages remain on-device in this version; no AI provider receives them.");
         card("Action executor", "Disabled. Approvals are recorded locally only. No other app is opened or controlled.");
         page.addView(button(stopped() ? "Resume proposal review" : "Activate kill switch", () -> {
             prefs.edit().putBoolean("kill", !stopped()).apply();
@@ -209,22 +209,47 @@ public class MainActivity extends Activity {
 
     private void chatPage() {
         page.addView(text("Talk to Apex.", 30, true, ink));
-        page.addView(text("Your conversation space. Type or dictate a message.", 15, false, muted));
-        gap(10);
-        card("AI connection", "Online AI is not connected yet. This build does not send messages to an AI service or pretend to generate AI answers.");
-        chatInput = edit("Ask Apex something…");
-        page.addView(button("🎙  Dictate message", () -> { voiceDestination = "chat"; startVoiceCapture(); }));
+        page.addView(text("A calmer place to ask, explore and learn.", 15, false, muted));
+        gap(8);
+        card("Assistant status", "AI is not connected yet. Messages will not receive generated answers until a secure AI service is configured.");
+        chatInput = edit("Message Apex…");
+        page.addView(button("🎙  Speak and send", () -> { voiceDestination = "chat"; startVoiceCapture(); }));
         page.addView(button("Send message", () -> {
             String message = chatInput == null ? "" : chatInput.getText().toString().trim();
-            if (message.isEmpty()) { Toast.makeText(this, "Type or dictate a message first.", Toast.LENGTH_SHORT).show(); return; }
-            addHistory("Chat draft composed (" + Math.min(message.length(), 500) + " characters); AI unavailable because no provider is configured.");
-            card("You", message);
-            card("Apex", "I received your message, but my AI brain is not connected yet. No online AI request was sent. Configure a secure AI backend to enable real answers.");
-            if (speech != null) speech.speak("I received your message, but my AI connection is not configured yet.", TextToSpeech.QUEUE_FLUSH, null, "apex-chat-status");
-            chatInput.setText("");
+            sendChatMessage(message);
         }));
         gap(8);
-        page.addView(text("Voice replies here currently speak the connection status. Real AI voice conversations need the secure AI service.", 12, false, muted));
+        page.addView(text("RECENT CONVERSATION", 12, true, muted));
+        JSONArray h = history();
+        boolean found = false;
+        for (int i = h.length() - 1; i >= 0; i--) {
+            String line = h.optString(i, "");
+            if (line.startsWith("Chat message: ")) {
+                card("You", line.substring("Chat message: ".length()));
+                found = true;
+                break;
+            }
+        }
+        if (!found) card("Start here", "Ask anything by typing or using the microphone. Dictated messages send automatically.");
+        page.addView(text("Wake phrase: not available in this build. Voice is activated only when you tap the microphone control.", 12, false, muted));
+    }
+
+    private void sendChatMessage(String message) {
+        if (message == null || message.trim().isEmpty()) {
+            Toast.makeText(this, "Say or type a message first.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        message = message.trim();
+        if (message.length() > 4000) {
+            Toast.makeText(this, "Please keep messages under 4,000 characters.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        addHistory("Chat message: " + message);
+        if (chatInput != null) chatInput.setText("");
+        // Fail honestly: no live AI transport exists in this app build yet.
+        addHistory("Apex response unavailable: AI backend is not configured.");
+        Toast.makeText(this, "Message sent locally. AI service is not connected yet.", Toast.LENGTH_LONG).show();
+        showPage("Chat");
     }
 
     @Override protected void onDestroy() {
