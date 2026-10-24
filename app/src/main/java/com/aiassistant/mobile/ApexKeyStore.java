@@ -1,0 +1,19 @@
+package com.aiassistant.mobile;
+import android.content.Context;import android.content.SharedPreferences;import android.security.keystore.KeyGenParameterSpec;import android.security.keystore.KeyProperties;import android.util.Base64;import org.json.*;import javax.crypto.*;import javax.crypto.spec.GCMParameterSpec;import java.security.*;import java.util.*;
+/** Private encrypted storage. Android Keystore protects the AES key; ciphertext lives in app-private preferences. */
+public final class ApexKeyStore {
+ private final SharedPreferences prefs; private static final String PREF="apex_secure_keys", ALIAS="apex_provider_v1"; private final JSONArray rows;
+ public static final class Entry {public String id,label,endpoint,model,status,masked; Entry(JSONObject o){id=o.optString("id");label=o.optString("label");endpoint=o.optString("endpoint");model=o.optString("model");status=o.optString("status","Not tested");masked="••••"+o.optString("last4","");}}
+ public ApexKeyStore(Context c){prefs=c.getSharedPreferences(PREF,Context.MODE_PRIVATE);rows=load();}
+ private JSONArray load(){try{return new JSONArray(prefs.getString("entries","[]"));}catch(Exception e){return new JSONArray();}}
+ private SecretKey secretKey() throws Exception {KeyStore ks=KeyStore.getInstance("AndroidKeyStore");ks.load(null);if(ks.containsAlias(ALIAS))return (SecretKey)ks.getKey(ALIAS,null);KeyGenerator g=KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES,"AndroidKeyStore");g.init(new KeyGenParameterSpec.Builder(ALIAS,KeyProperties.PURPOSE_ENCRYPT|KeyProperties.PURPOSE_DECRYPT).setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).setRandomizedEncryptionRequired(true).build());return g.generateKey();}
+ private String encrypt(String value)throws Exception{Cipher c=Cipher.getInstance("AES/GCM/NoPadding");c.init(Cipher.ENCRYPT_MODE,secretKey());byte[] iv=c.getIV(), enc=c.doFinal(value.getBytes("UTF-8"));return Base64.encodeToString(iv,2)+":"+Base64.encodeToString(enc,2);}
+ private String decrypt(String value)throws Exception{String[] p=value.split(":");Cipher c=Cipher.getInstance("AES/GCM/NoPadding");c.init(Cipher.DECRYPT_MODE,secretKey(),new GCMParameterSpec(128,Base64.decode(p[0],2)));return new String(c.doFinal(Base64.decode(p[1],2)),"UTF-8");}
+ public synchronized void add(String label,String endpoint,String model,String key)throws Exception{JSONObject o=new JSONObject();o.put("id",UUID.randomUUID().toString());o.put("label",label);o.put("endpoint",endpoint);o.put("model",model);o.put("secret",encrypt(key));o.put("last4",key.substring(Math.max(0,key.length()-4)));o.put("status","Not tested");rows.put(o);save();}
+ public synchronized List<Entry> list(){List<Entry> out=new ArrayList<>();for(int i=0;i<rows.length();i++)out.add(new Entry(rows.optJSONObject(i)));return out;}
+ public synchronized String key(String id){for(int i=0;i<rows.length();i++){JSONObject o=rows.optJSONObject(i);if(o.optString("id").equals(id))try{return decrypt(o.getString("secret"));}catch(Exception e){throw new IllegalStateException("Key decrypt failed");}}throw new IllegalArgumentException("Key no longer exists");}
+ public synchronized JSONObject config(String id){for(int i=0;i<rows.length();i++){JSONObject o=rows.optJSONObject(i);if(o.optString("id").equals(id))return o;}return null;}
+ public synchronized void status(String id,String status){for(int i=0;i<rows.length();i++){JSONObject o=rows.optJSONObject(i);if(o.optString("id").equals(id))o.remove("status");if(o.optString("id").equals(id))try{o.put("status",status);}catch(Exception ignored){}}save();}
+ public synchronized void remove(String id){JSONArray n=new JSONArray();for(int i=0;i<rows.length();i++){JSONObject o=rows.optJSONObject(i);if(!o.optString("id").equals(id))n.put(o);}while(rows.length()>0)rows.remove(0);for(int i=0;i<n.length();i++)rows.put(n.opt(i));save();}
+ private void save(){prefs.edit().putString("entries",rows.toString()).apply();}
+}
