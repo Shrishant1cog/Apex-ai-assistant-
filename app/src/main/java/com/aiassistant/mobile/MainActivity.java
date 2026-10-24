@@ -395,7 +395,8 @@ public class MainActivity extends Activity {
         gap(8); card("Failover policy", "Apex tries eligible keys in order. Authentication, rate-limit, quota and server errors can move to the next key/provider. Bad-request errors stop. Offline failures stop. Respect provider quotas; extra keys do not create extra entitlement.");
         card("Current limitation", "This app calls compatible chat-completions endpoints directly. A production multi-user release should move credentials to a controlled backend. Treat app/device compromise as a risk.");
     }
-\n    private void historyPage() {
+
+    private void historyPage() {
         page.addView(text("Local activity history", 25, true, ink));
         page.addView(text("Stored on this device. Entries are simple records, not tamper-proof security auditing.", 14, false, muted));
         gap(10);
