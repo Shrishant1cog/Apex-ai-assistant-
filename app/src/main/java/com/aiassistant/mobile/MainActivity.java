@@ -165,19 +165,16 @@ public class MainActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(paper);
-        TextView top = text("AI MOBILE ASSISTANT", 12, true, accent);
-        top.setPadding(dp(20), dp(18), dp(20), dp(10)); top.setTextSize(13); root.addView(top);
+        LinearLayout masthead=new LinearLayout(this); masthead.setGravity(Gravity.CENTER_VERTICAL); masthead.setPadding(dp(20),dp(13),dp(20),dp(13));
+        LinearLayout brand=new LinearLayout(this); brand.setOrientation(LinearLayout.VERTICAL); brand.addView(text("APEX",22,true,ink)); brand.addView(text("YOUR PERSONAL AI",10,true,accent)); masthead.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
+        TextView live=text(keyStore.list().isEmpty()?"SETUP":"READY",10,true,accent); android.graphics.drawable.GradientDrawable pill=new android.graphics.drawable.GradientDrawable(); pill.setColor(Color.rgb(226,242,234)); pill.setCornerRadius(dp(20)); live.setPadding(dp(12),dp(7),dp(12),dp(7)); live.setBackground(pill); masthead.addView(live); root.addView(masthead);
         ScrollView scroll = new ScrollView(this);
         page = new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(dp(20), dp(8), dp(20), dp(20));
         scroll.addView(page); root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-        LinearLayout nav = new LinearLayout(this); nav.setBackgroundColor(Color.WHITE);
+        LinearLayout nav = new LinearLayout(this); nav.setGravity(Gravity.CENTER); nav.setPadding(dp(5),dp(5),dp(5),dp(5)); nav.setBackgroundColor(Color.WHITE);
         String[] tabs = {"Home", "Chat", "Settings", "Policy", "History"};
-        for (String tab : tabs) {
-            Button b = new Button(this); b.setText(tab); b.setAllCaps(false); b.setTextSize(11);
-            b.setOnClickListener(v -> showPage(tab));
-            nav.addView(b, new LinearLayout.LayoutParams(0, dp(52), 1));
-        }
+        for (String tab : tabs) { TextView b = new TextView(this); b.setText(tab); b.setGravity(Gravity.CENTER); b.setTextSize(11); b.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL)); b.setTextColor(tab.equals(name)?accent:muted); if(tab.equals(name)){android.graphics.drawable.GradientDrawable selected=new android.graphics.drawable.GradientDrawable();selected.setColor(Color.rgb(232,245,237));selected.setCornerRadius(dp(13));b.setBackground(selected);} b.setPadding(dp(3),dp(12),dp(3),dp(12)); b.setOnClickListener(v -> showPage(tab)); nav.addView(b,new LinearLayout.LayoutParams(0,dp(50),1)); }
         root.addView(nav);
         setContentView(root);
 
