@@ -366,31 +366,53 @@ public class MainActivity extends Activity {
 
     private void settingsPage() {
         page.addView(text("Apex AI settings", 28, true, ink));
-        page.addView(text("Apex remains your assistant identity. Providers are interchangeable engines.", 14, false, muted));
+        page.addView(text("Connect Apex by pasting your API key. Apex detects supported key formats and chooses a compatible default model automatically.", 14, false, muted));
         gap(8);
-        card("Key safety", "Keys are encrypted with Android Keystore-backed AES-GCM and kept in private app storage. Keys are sent only to the endpoint you configure. Avoid unknown/custom endpoints.");
-        page.addView(text("Add provider / key", 18, true, ink));
-        EditText provider = edit("Provider label (e.g. OpenAI-compatible)");
-        EditText endpoint = edit("Chat completions endpoint URL (HTTPS recommended)");
-        EditText model = edit("Model name");
-        EditText secret = edit("API key (never shown again)"); secret.setInputType(129);
-        page.addView(button("Save key", () -> {
-            String label=provider.getText().toString().trim(), url=endpoint.getText().toString().trim(), m=model.getText().toString().trim(), k=secret.getText().toString();
-            if(label.isEmpty()||url.isEmpty()||m.isEmpty()||k.isEmpty()){Toast.makeText(this,"Complete all fields.",Toast.LENGTH_SHORT).show();return;}
-            if(!url.startsWith("https://") && !url.startsWith("http://10.0.2.2")){Toast.makeText(this,"Use HTTPS for remote endpoints.",Toast.LENGTH_LONG).show();return;}
-            try { keyStore.add(label,url,m,k); addHistory("AI provider key added: "+label); Toast.makeText(this,"Encrypted key saved.",Toast.LENGTH_SHORT).show(); showPage("Settings"); }
-            catch(Exception e){Toast.makeText(this,"Could not securely save key: "+e.getMessage(),Toast.LENGTH_LONG).show();}
+        card("Key safety", "Keys are encrypted with Android Keystore-backed AES-GCM and kept in private app storage. Keys are sent only to the detected provider. Use keys from the provider's official website.");
+        page.addView(text("Connect your AI", 18, true, ink));
+        EditText secret = edit("Paste your AI API key");
+        secret.setSingleLine(true);
+        secret.setInputType(129);
+        page.addView(button("Connect key", () -> {
+            String k = secret.getText().toString().trim();
+            if (k.isEmpty()) { Toast.makeText(this, "Paste an API key first.", Toast.LENGTH_SHORT).show(); return; }
+            String label, endpoint, model;
+            if (k.startsWith("sk-or-")) {
+                label="OpenRouter"; endpoint="https://openrouter.ai/api/v1/chat/completions"; model="openai/gpt-4o-mini";
+            } else if (k.startsWith("gsk_")) {
+                label="Groq"; endpoint="https://api.groq.com/openai/v1/chat/completions"; model="llama-3.3-70b-versatile";
+            } else if (k.startsWith("sk-ant-")) {
+                Toast.makeText(this, "This looks like an Anthropic key. Direct Anthropic API uses a different format. For now, connect through a compatible gateway such as OpenRouter using its key.", Toast.LENGTH_LONG).show(); return;
+            } else if (k.startsWith("AIza")) {
+                Toast.makeText(this, "This looks like a Google AI key. Automatic Gemini connection is not supported by this chat-completions build yet. Use an OpenRouter or Groq key, or configure a compatible gateway.", Toast.LENGTH_LONG).show(); return;
+            } else if (k.startsWith("sk-")) {
+                label="OpenAI"; endpoint="https://api.openai.com/v1/chat/completions"; model="gpt-4o-mini";
+            } else {
+                Toast.makeText(this, "Apex couldn't identify this key format. Use an OpenAI, Groq (gsk_), or OpenRouter (sk-or-) API key.", Toast.LENGTH_LONG).show(); return;
+            }
+            try {
+                keyStore.add(label, endpoint, model, k);
+                addHistory("AI key connected: " + label + " (default model " + model + ")");
+                Toast.makeText(this, "Key saved securely. Testing provider…", Toast.LENGTH_SHORT).show();
+                java.util.List<ApexKeyStore.Entry> saved=keyStore.list();
+                ApexKeyStore.Entry newest=saved.get(saved.size()-1);
+                aiClient.test(newest.id,new ApexAiClient.Callback(){
+                    public void onSuccess(String msg,String route){runOnUiThread(()->{keyStore.status(newest.id,"Connected • "+model);addHistory("AI connection test passed: "+label);Toast.makeText(MainActivity.this,"Apex connected to "+label+".",Toast.LENGTH_LONG).show();showPage("Settings");});}
+                    public void onFailure(String err){runOnUiThread(()->{keyStore.status(newest.id,"Needs attention • "+err);addHistory("AI connection test failed: "+label);Toast.makeText(MainActivity.this,"Key saved, but connection failed: "+err,Toast.LENGTH_LONG).show();showPage("Settings");});}
+                });
+            } catch(Exception e) { Toast.makeText(this,"Could not securely save key: "+e.getMessage(),Toast.LENGTH_LONG).show(); }
         }));
-        gap(12); page.addView(text("Configured keys",18,true,ink));
+        page.addView(text("Provider and model are detected from recognizable key prefixes. The default model is selected automatically; some providers may change model availability. If the key format isn't recognized, Apex asks for a supported key type rather than guessing.",12,false,muted));
+        gap(12); page.addView(text("Connected keys",18,true,ink));
         java.util.List<ApexKeyStore.Entry> entries=keyStore.list();
-        if(entries.isEmpty()) page.addView(text("No keys saved.",14,false,muted));
+        if(entries.isEmpty()) page.addView(text("No keys connected yet.",14,false,muted));
         for(ApexKeyStore.Entry entry:entries){
             card(entry.label+" • "+entry.model, "Status: "+entry.status+"\nEndpoint: "+entry.endpoint+"\nKey: "+entry.masked);
             page.addView(button("Test connection • "+entry.label, () -> { Toast.makeText(this,"Testing "+entry.label+"…",Toast.LENGTH_SHORT).show(); aiClient.test(entry.id,new ApexAiClient.Callback(){public void onSuccess(String msg,String route){runOnUiThread(()->{keyStore.status(entry.id,"OK • tested");addHistory("Provider test passed: "+entry.label);Toast.makeText(MainActivity.this,"Connection succeeded.",Toast.LENGTH_LONG).show();showPage("Settings");});}public void onFailure(String err){runOnUiThread(()->{keyStore.status(entry.id,"Failed • "+err);addHistory("Provider test failed: "+entry.label);Toast.makeText(MainActivity.this,err,Toast.LENGTH_LONG).show();showPage("Settings");});}}); }));
             page.addView(button("Remove key • "+entry.label, () -> { keyStore.remove(entry.id); addHistory("Provider key removed: "+entry.label); showPage("Settings"); }));
         }
         gap(8); card("Failover policy", "Apex tries eligible keys in order. Authentication, rate-limit, quota and server errors can move to the next key/provider. Bad-request errors stop. Offline failures stop. Respect provider quotas; extra keys do not create extra entitlement.");
-        card("Current limitation", "This app calls compatible chat-completions endpoints directly. A production multi-user release should move credentials to a controlled backend. Treat app/device compromise as a risk.");
+        card("Current limitation", "Automatic setup currently recognizes OpenAI, Groq, and OpenRouter key formats and assigns a compatible default model. It does not query a provider model catalog yet, and a recognized key can still lack access to the selected model. This app calls provider endpoints directly; treat device compromise as a risk.");
     }
 
     private void historyPage() {
